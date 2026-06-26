@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="theme-color" content="#FFD3B6" />
+<title>Reading Flashcards</title>
+<style>
+  :root{
+    --ui: rgba(0,0,0,0.55);
+    --ui-bg: rgba(255,255,255,0.45);
+    --panel: #ffffff;
+    --ink: #2b2b2b;
+    --accent: #ff7a59;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+  html,body{ height:100%; margin:0; overflow:hidden; }
+  body{
+    font-family: "Segoe UI", Roboto, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    background:#FFD3B6;
+    transition: background .45s ease;
+    -webkit-user-select:none; user-select:none;
+    touch-action: pan-y;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:5;
+    display:flex; align-items:center; justify-content:space-between;
+    padding: max(10px, env(safe-area-inset-top)) 16px 8px;
+    gap:10px;
+  }
+  .progress-wrap{ flex:1; display:flex; align-items:center; gap:8px; min-width:0; }
+  .pill{
+    font-size:14px; font-weight:700; color:var(--ui);
+    background:var(--ui-bg); padding:5px 11px; border-radius:999px;
+    backdrop-filter: blur(6px); white-space:nowrap; flex:none;
+  }
+  .count{ min-width:58px; text-align:center; }
+  .setpill{ display:none; }
+  .bar{
+    flex:1; height:8px; border-radius:999px; background:var(--ui-bg);
+    overflow:hidden; min-width:30px;
+  }
+  .bar > i{
+    display:block; height:100%; width:0%;
+    background: var(--ui); opacity:.65; border-radius:999px;
+    transition: width .35s ease;
+  }
+  .gear{
+    flex:none; width:44px; height:44px; border:none; border-radius:50%;
+    background:var(--ui-bg); color:var(--ui); display:grid; place-items:center;
+    backdrop-filter: blur(6px); cursor:pointer;
+  }
+  .gear svg{ width:24px; height:24px; }
+
+  /* ---- Card / word ---- */
+  .stage{
+    position:fixed; inset:0;
+    display:grid; place-items:center;
+    padding: 84px 18px 150px;
+  }
+  .word{
+    text-align:center; line-height:1.02; font-weight:800;
+    color:var(--ink); letter-spacing:.5px;
+    max-width:94vw; word-break:break-word; cursor:pointer;
+    font-size: 16vw;
+  }
+  .word.pop{ animation: pop .4s cubic-bezier(.2,.8,.3,1.2); }
+  @keyframes pop{
+    0%{ transform: scale(.7); opacity:0; }
+    100%{ transform: scale(1); opacity:1; }
+  }
+  .hint{
+    position:fixed; left:0; right:0; bottom:128px; text-align:center;
+    color:var(--ui); font-size:14px; font-weight:600; opacity:.8;
+    pointer-events:none;
+  }
+
+  /* ---- Bottom controls ---- */
+  .controls{
+    position:fixed; left:0; right:0; z-index:5;
+    bottom: max(20px, env(safe-area-inset-bottom));
+    display:flex; align-items:center; justify-content:center; gap:26px;
+    padding:0 16px;
+  }
+  .nav{
+    width:60px; height:60px; border:none; border-radius:50%;
+    background:var(--ui-bg); color:var(--ui); display:grid; place-items:center;
+    backdrop-filter: blur(6px); cursor:pointer; transition: transform .12s ease;
+  }
+  .nav:active{ transform: scale(.9); }
+  .nav svg{ width:30px; height:30px; }
+  .nav[disabled]{ opacity:.3; }
+  .speak{
+    width:104px; height:104px; border:none; border-radius:50%;
+    background:#fff; color:var(--ink);
+    display:grid; place-items:center; cursor:pointer;
+    box-shadow: 0 10px 26px rgba(0,0,0,.18);
+    transition: transform .12s ease;
+  }
+  .speak:active{ transform: scale(.92); }
+  .speak.talking{ animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{ transform:scale(1);} 50%{ transform:scale(1.07);} }
+  .speak svg{ width:50px; height:50px; }
+
+  /* ---- Done screen ---- */
+  .done{ text-align:center; color:var(--ink); padding:0 16px; }
+  .done .emoji{ font-size:20vw; line-height:1; }
+  .done .msg{ font-size:7vw; font-weight:800; margin-top:6px; }
+  .done .sub{ font-size:4.2vw; font-weight:600; opacity:.7; margin-top:6px; }
+  .donebtns{ display:flex; flex-direction:column; gap:12px; align-items:center; margin-top:26px; }
+  .bigbtn{
+    font-size:20px; font-weight:700; color:#fff;
+    background:var(--ink); border:none; border-radius:999px;
+    padding:14px 34px; cursor:pointer; min-width:220px;
+  }
+  .bigbtn.ghost{ background:transparent; color:var(--ink); border:2px solid var(--ink); padding:12px 32px; }
+
+  /* ---- Settings panel ---- */
+  .scrim{
+    position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:8;
+    opacity:0; pointer-events:none; transition:opacity .25s ease;
+  }
+  .scrim.open{ opacity:1; pointer-events:auto; }
+  .panel{
+    position:fixed; top:0; right:0; bottom:0; z-index:9;
+    width:min(420px, 90vw); background:var(--panel);
+    transform: translateX(100%); transition: transform .28s ease;
+    display:flex; flex-direction:column;
+    box-shadow: -8px 0 30px rgba(0,0,0,.2);
+  }
+  .panel.open{ transform: translateX(0); }
+  .panel header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: max(16px, env(safe-area-inset-top)) 18px 14px;
+    border-bottom:1px solid #eee;
+  }
+  .panel header h2{ margin:0; font-size:20px; color:var(--ink); }
+  .panel .close{ border:none; background:#f1f1f1; width:36px; height:36px; border-radius:50%; font-size:20px; cursor:pointer; }
+  .panel .body{ padding:18px; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+  .field{ margin-bottom:22px; }
+  .field > label{ display:block; font-weight:700; color:var(--ink); margin-bottom:8px; font-size:15px; }
+  .field .sub{ font-weight:400; color:#888; font-size:13px; }
+  textarea{
+    width:100%; min-height:150px; resize:vertical; padding:12px;
+    border:1px solid #ddd; border-radius:12px; font-size:16px; line-height:1.5;
+    font-family:inherit; color:var(--ink);
+  }
+  .row{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:6px 0; }
+  .row span{ color:var(--ink); font-size:15px; font-weight:600; }
+  select{ padding:8px 10px; border-radius:10px; border:1px solid #ddd; background:#fff; color:var(--ink); max-width:62%; font-size:15px; }
+  .seg{ display:inline-flex; background:#f1f1f1; border-radius:10px; overflow:hidden; }
+  .seg button{ border:none; background:transparent; padding:8px 12px; cursor:pointer; font-weight:600; color:#666; font-size:15px; }
+  .seg button.on{ background:var(--ink); color:#fff; }
+  .sw{ position:relative; width:50px; height:30px; flex:none; }
+  .sw input{ opacity:0; width:0; height:0; }
+  .sw .track{ position:absolute; inset:0; background:#d8d8d8; border-radius:999px; transition:.2s; }
+  .sw .track::after{ content:""; position:absolute; width:24px; height:24px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.2s; box-shadow:0 1px 3px rgba(0,0,0,.3); }
+  .sw input:checked + .track{ background:#34c759; }
+  .sw input:checked + .track::after{ transform: translateX(20px); }
+  input[type=range]{ width:60%; accent-color: var(--accent); }
+  .save{ width:100%; padding:14px; border:none; border-radius:12px; background:var(--ink); color:#fff; font-size:17px; font-weight:700; cursor:pointer; }
+  .reset{ width:100%; margin-top:10px; padding:12px; border:1px solid #e0c2c2; border-radius:12px; background:#fff; color:#c0392b; font-size:15px; font-weight:600; cursor:pointer; }
+  .note{ font-size:12px; color:#aaa; text-align:center; margin-top:14px; line-height:1.5; }
+
+  /* ---- Set picker ---- */
+  .setpill{ cursor:pointer; }
+  #setScrim{ z-index:10; }
+  .setpicker{
+    position:fixed; z-index:11; left:50%; top:50%;
+    transform: translate(-50%,-50%) scale(.92);
+    background:#fff; border-radius:20px; padding:20px;
+    width:min(360px, 88vw); box-shadow:0 20px 50px rgba(0,0,0,.3);
+    opacity:0; pointer-events:none; transition: opacity .2s ease, transform .2s ease;
+  }
+  .setpicker.open{ opacity:1; pointer-events:auto; transform: translate(-50%,-50%) scale(1); }
+  .setpicker h3{ margin:0 0 14px; font-size:18px; color:var(--ink); text-align:center; }
+  .setgrid{ display:grid; grid-template-columns:repeat(5,1fr); gap:10px; }
+  .setgrid button{
+    aspect-ratio:1/1; border:none; border-radius:14px; background:#f1f1f1;
+    font-size:19px; font-weight:800; color:#555; cursor:pointer;
+  }
+  .setgrid button.cur{ background:var(--accent); color:#fff; }
+  @media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important; } }
+</style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="progress-wrap">
+      <div class="pill setpill" id="setpill">Set 1/1</div>
+      <div class="pill count" id="count">1 / 1</div>
+      <div class="bar"><i id="barFill"></i></div>
+    </div>
+    <button class="gear" id="openSettings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="word" id="word">word</div>
+  </div>
+  <div class="hint" id="hint">press the speaker to hear the word</div>
+
+  <div class="controls">
+    <button class="nav" id="prev" aria-label="Previous word">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <button class="speak" id="speak" aria-label="Read word aloud">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11 5 6 9H3a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h3l5 4a1 1 0 0 0 1.6-.8V5.8A1 1 0 0 0 11 5z"/><path d="M16.5 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M19 6a8 8 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <button class="nav" id="next" aria-label="Next word">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  </div>
+
+  <!-- Set picker -->
+  <div class="scrim" id="setScrim"></div>
+  <div class="setpicker" id="setPicker" role="dialog" aria-label="Choose a set">
+    <h3>Choose a set</h3>
+    <div class="setgrid" id="setGrid"></div>
+  </div>
+
+  <!-- Settings -->
+  <div class="scrim" id="scrim"></div>
+  <aside class="panel" id="panel" aria-label="Settings">
+    <header>
+      <h2>Settings</h2>
+      <button class="close" id="closeSettings" aria-label="Close">&times;</button>
+    </header>
+    <div class="body">
+      <div class="field">
+        <label>Word list <span class="sub">&mdash; one word per line</span></label>
+        <textarea id="wordsInput" spellcheck="false"></textarea>
+      </div>
+
+      <div class="field">
+        <div class="row"><span>Words per set</span>
+          <select id="setSizeSel">
+            <option value="all">All at once</option>
+            <option value="6">6 at a time</option>
+            <option value="8">8 at a time</option>
+            <option value="10">10 at a time</option>
+            <option value="12">12 at a time</option>
+          </select>
+        </div>
+        <div class="row"><span>Shuffle order</span>
+          <label class="sw"><input type="checkbox" id="shuffle"><span class="track"></span></label>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Letter case</label>
+        <div class="seg" id="caseSeg">
+          <button data-case="as" class="on">As typed</button>
+          <button data-case="lower">small</button>
+          <button data-case="upper">CAPS</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="row"><span>Voice</span>
+          <select id="voiceSel"></select>
+        </div>
+        <div class="row"><span>Speaking speed</span>
+          <input type="range" id="rate" min="0.5" max="1.2" step="0.05" value="0.85">
+        </div>
+      </div>
+
+      <button class="save" id="save">Save &amp; start</button>
+      <button class="reset" id="reset">Reset to UFLI heart words</button>
+      <p class="note">Tip: open this in Chrome on your phone, then use the browser menu &rarr; <b>Add to Home screen</b> to use it like an app. It works offline once saved.</p>
+    </div>
+  </aside>
+
+<script>
+(function(){
+  "use strict";
+
+  var store = {
+    get: function(k){ try { return localStorage.getItem(k); } catch(e){ return null; } },
+    set: function(k,v){ try { localStorage.setItem(k,v); } catch(e){} }
+  };
+
+  // ---- UFLI Foundations irregular "heart" words, in teaching order ----
+  var STARTER = ["the","said","to","do","of","from","are","was","what","your",
+    "goes","says","their","were","talk","walk","could","would","should","there",
+    "where","who","one","once","two","does","many","any","been","into",
+    "friend","because","woman","women","move","both","four","fourth","people","pretty",
+    "nothing","other","another","mother","brother","today","very","above","among","again",
+    "against","always","almost","floor","poor","door","won","son","month","hour",
+    "minute","Monday","Wednesday","February","eye","heart","about","answer","honest","honor",
+    "truth","truly","busy","build","built","sure","laugh","whom","whose","toward",
+    "through","learn","earth","early","buy","guy","guess","guest","guide","young",
+    "touch","enough","tough","rough"];
+
+  var PALETTE = [
+    { bg:"linear-gradient(160deg,#FFE8D6,#FFD3B6)", ink:"#5B3A29", ui:"#7a4a2f", theme:"#FFD3B6" },
+    { bg:"linear-gradient(160deg,#D9F5E6,#B6EBD0)", ink:"#1F4D38", ui:"#2c6b4d", theme:"#B6EBD0" },
+    { bg:"linear-gradient(160deg,#DCEEFF,#BFDFFF)", ink:"#1E3A5F", ui:"#2c5482", theme:"#BFDFFF" },
+    { bg:"linear-gradient(160deg,#ECE4FF,#DAC9FF)", ink:"#3D2B5F", ui:"#553c85", theme:"#DAC9FF" },
+    { bg:"linear-gradient(160deg,#FFF6D6,#FFEEA8)", ink:"#5C4A12", ui:"#7a6418", theme:"#FFEEA8" },
+    { bg:"linear-gradient(160deg,#FFE2EC,#FFC9DB)", ink:"#5C2438", ui:"#7d3450", theme:"#FFC9DB" }
+  ];
+
+  var settings = {
+    words: STARTER.slice(),
+    setSize: store.get("setSize") || "8",
+    shuffle: store.get("shuffle") === "1",
+    "case": store.get("case") || "as",
+    rate: parseFloat(store.get("rate")) || 0.85,
+    voiceURI: store.get("voiceURI") || ""
+  };
+  var savedWords = store.get("words");
+  if (savedWords){ try { var p = JSON.parse(savedWords); if (Array.isArray(p) && p.length) settings.words = p; } catch(e){} }
+
+  var fullOrder = [];   // indices into settings.words
+  var setSize = 8;      // resolved numeric set size
+  var totalSets = 1;
+  var setIndex = 0;     // which set
+  var pos = 0;          // position within current set
+  var done = false;
+
+  var $ = function(id){ return document.getElementById(id); };
+  var stage=$("stage"), wordEl=$("word"), hint=$("hint"),
+      setpill=$("setpill"), countEl=$("count"), barFill=$("barFill"),
+      prevBtn=$("prev"), nextBtn=$("next"), speakBtn=$("speak");
+
+  function resolveSetSize(){
+    if (settings.setSize === "all") return settings.words.length || 1;
+    var n = parseInt(settings.setSize, 10);
+    if (!n || n < 1) n = settings.words.length || 1;
+    return n;
+  }
+
+  function buildOrder(){
+    fullOrder = settings.words.map(function(_,i){ return i; });
+    if (settings.shuffle){
+      for (var i=fullOrder.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=fullOrder[i]; fullOrder[i]=fullOrder[j]; fullOrder[j]=t; }
+    }
+    setSize = resolveSetSize();
+    totalSets = Math.max(1, Math.ceil(fullOrder.length / setSize));
+    setIndex = 0; pos = 0; done = false;
+  }
+
+  function currentSet(){
+    var start = setIndex * setSize;
+    return fullOrder.slice(start, start + setSize);
+  }
+
+  function casing(w){
+    if (settings["case"]==="lower") return w.toLowerCase();
+    if (settings["case"]==="upper") return w.toUpperCase();
+    return w;
+  }
+
+  function fitWord(){
+    var size = 16;
+    wordEl.style.fontSize = size + "vw";
+    var max = Math.min(window.innerWidth*0.94, 760);
+    var guard = 0;
+    while (wordEl.scrollWidth > max && size > 5 && guard < 40){ size -= 0.6; wordEl.style.fontSize = size + "vw"; guard++; }
+  }
+
+  function applyTheme(i){
+    var p = PALETTE[((i % PALETTE.length)+PALETTE.length) % PALETTE.length];
+    document.body.style.background = p.bg;
+    document.documentElement.style.setProperty("--ink", p.ink);
+    document.documentElement.style.setProperty("--ui", p.ui);
+    var meta = document.querySelector('meta[name=theme-color]'); if (meta) meta.content = p.theme;
+  }
+
+  function rebuildWordEl(){
+    if (!document.getElementById("word")){
+      stage.innerHTML = '<div class="word" id="word">word</div>';
+      wordEl = document.getElementById("word");
+    }
+  }
+
+  function showSetPill(){
+    if (totalSets > 1){ setpill.style.display="block"; setpill.textContent = "Set " + (setIndex+1) + "/" + totalSets + " \u25BE"; }
+    else { setpill.style.display="none"; }
+  }
+
+  function render(animate){
+    var set = currentSet();
+    showSetPill();
+    prevBtn.disabled = (pos<=0);
+
+    if (done){
+      var last = (setIndex >= totalSets-1);
+      applyTheme(setIndex+1);
+      countEl.textContent = "\u2605";
+      barFill.style.width = "100%";
+      hint.style.display="none";
+      nextBtn.disabled = true;
+      prevBtn.disabled = false;
+      var emoji = last ? "\uD83C\uDF89" : "\uD83C\uDF1F";
+      var msg = last ? "All done!" : "Set " + (setIndex+1) + " done!";
+      var sub = last ? "Great reading today" : "Ready for the next set?";
+      var html = '<div class="done"><div class="emoji">'+emoji+'</div><div class="msg">'+msg+'</div><div class="sub">'+sub+'</div><div class="donebtns">';
+      if (!last) html += '<button class="bigbtn" id="nextSet">Next set &#9654;</button>';
+      html += '<button class="bigbtn'+(last?'':' ghost')+'" id="startOver">Start over</button></div></div>';
+      stage.innerHTML = html;
+      var ns = $("nextSet");
+      if (ns) ns.addEventListener("click", function(){ setIndex++; pos=0; done=false; rebuildWordEl(); render(true); });
+      $("startOver").addEventListener("click", function(){ buildOrder(); rebuildWordEl(); render(true); });
+      return;
+    }
+
+    nextBtn.disabled = false;
+    hint.style.display = (setIndex===0 && pos===0) ? "block" : "none";
+    var wi = set[pos];
+    wordEl.textContent = casing(settings.words[wi]);
+    applyTheme(setIndex*setSize + pos);
+    fitWord();
+    if (animate){ wordEl.classList.remove("pop"); void wordEl.offsetWidth; wordEl.classList.add("pop"); }
+    countEl.textContent = (pos+1) + " / " + set.length;
+    barFill.style.width = (((pos+1)/set.length)*100) + "%";
+  }
+
+  function go(dir){
+    rebuildWordEl();
+    if (done){
+      if (dir<0){ done=false; render(true); }
+      return;
+    }
+    var set = currentSet();
+    var np = pos + dir;
+    if (np < 0) return;
+    if (np >= set.length){ done = true; render(false); return; }
+    pos = np;
+    render(true);
+  }
+
+  // ---- speech ----
+  var voices = [];
+  function loadVoices(){
+    if (!("speechSynthesis" in window)) return;
+    voices = window.speechSynthesis.getVoices() || [];
+    var sel = $("voiceSel"); if (!sel) return;
+    sel.innerHTML = "";
+    var eng = voices.filter(function(v){ return /^en/i.test(v.lang); });
+    var list = eng.length ? eng : voices;
+    list.forEach(function(v){
+      var o = document.createElement("option");
+      o.value = v.voiceURI; o.textContent = v.name + " (" + v.lang + ")";
+      if (v.voiceURI === settings.voiceURI) o.selected = true;
+      sel.appendChild(o);
+    });
+    if (!settings.voiceURI && list[0]){ settings.voiceURI = list[0].voiceURI; }
+  }
+  function pickVoice(){
+    return voices.filter(function(v){ return v.voiceURI === settings.voiceURI; })[0] ||
+           voices.filter(function(v){ return /^en/i.test(v.lang); })[0] || voices[0];
+  }
+  function speak(){
+    if (done) return;
+    if (!("speechSynthesis" in window)) return;
+    var set = currentSet();
+    var raw = settings.words[set[pos]];
+    if (!raw) return;
+    try{
+      window.speechSynthesis.cancel();
+      var u = new SpeechSynthesisUtterance(raw);
+      var v = pickVoice(); if (v) u.voice = v;
+      u.lang = (v && v.lang) || "en-US";
+      u.rate = settings.rate; u.pitch = 1.05;
+      u.onstart = function(){ speakBtn.classList.add("talking"); };
+      u.onend = u.onerror = function(){ speakBtn.classList.remove("talking"); };
+      window.speechSynthesis.speak(u);
+    }catch(e){}
+  }
+  if ("speechSynthesis" in window){
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+  }
+
+  // ---- swipe ----
+  var sx=0, sy=0, tracking=false;
+  document.addEventListener("touchstart", function(e){
+    if (e.target.closest(".panel,.gear,.controls")) { tracking=false; return; }
+    var t=e.changedTouches[0]; sx=t.clientX; sy=t.clientY; tracking=true;
+  }, {passive:true});
+  document.addEventListener("touchend", function(e){
+    if (!tracking) return; tracking=false;
+    var t=e.changedTouches[0];
+    var dx=t.clientX-sx, dy=t.clientY-sy;
+    if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy)){ go(dx<0 ? 1 : -1); }
+  }, {passive:true});
+
+  // ---- buttons / keys ----
+  speakBtn.addEventListener("click", speak);
+  nextBtn.addEventListener("click", function(){ go(1); });
+  prevBtn.addEventListener("click", function(){ go(-1); });
+  document.addEventListener("keydown", function(e){
+    if (e.key==="ArrowRight"||e.key===" ") { e.preventDefault(); go(1); }
+    else if (e.key==="ArrowLeft") go(-1);
+    else if (e.key==="Enter") speak();
+  });
+
+  // ---- set picker ----
+  var setScrim=$("setScrim"), setPicker=$("setPicker"), setGrid=$("setGrid");
+  function openSetPicker(){
+    if (totalSets <= 1) return;
+    setGrid.innerHTML = "";
+    for (var s=0; s<totalSets; s++){
+      (function(si){
+        var b = document.createElement("button");
+        b.textContent = String(si+1);
+        if (si === setIndex) b.className = "cur";
+        b.addEventListener("click", function(){
+          setIndex = si; pos = 0; done = false;
+          rebuildWordEl(); render(true); closeSetPicker();
+        });
+        setGrid.appendChild(b);
+      })(s);
+    }
+    setScrim.classList.add("open"); setPicker.classList.add("open");
+  }
+  function closeSetPicker(){ setScrim.classList.remove("open"); setPicker.classList.remove("open"); }
+  setpill.addEventListener("click", openSetPicker);
+  setScrim.addEventListener("click", closeSetPicker);
+
+  // ---- settings panel ----
+  var scrim=$("scrim"), panel=$("panel");
+  function openPanel(){
+    $("wordsInput").value = settings.words.join("\n");
+    $("setSizeSel").value = settings.setSize;
+    $("shuffle").checked = settings.shuffle;
+    $("rate").value = settings.rate;
+    setCaseUI(settings["case"]);
+    loadVoices();
+    scrim.classList.add("open"); panel.classList.add("open");
+  }
+  function closePanel(){ scrim.classList.remove("open"); panel.classList.remove("open"); }
+  $("openSettings").addEventListener("click", openPanel);
+  $("closeSettings").addEventListener("click", closePanel);
+  scrim.addEventListener("click", closePanel);
+
+  function setCaseUI(c){
+    document.querySelectorAll("#caseSeg button").forEach(function(b){ b.classList.toggle("on", b.getAttribute("data-case")===c); });
+  }
+  document.querySelectorAll("#caseSeg button").forEach(function(b){
+    b.addEventListener("click", function(){ setCaseUI(b.getAttribute("data-case")); });
+  });
+
+  $("save").addEventListener("click", function(){
+    var raw = $("wordsInput").value.split("\n").map(function(s){ return s.trim(); }).filter(Boolean);
+    if (!raw.length) raw = STARTER.slice();
+    settings.words = raw;
+    settings.setSize = $("setSizeSel").value;
+    settings.shuffle = $("shuffle").checked;
+    settings.rate = parseFloat($("rate").value) || 0.85;
+    var onCase = document.querySelector("#caseSeg button.on");
+    settings["case"] = onCase ? onCase.getAttribute("data-case") : "as";
+    settings.voiceURI = $("voiceSel").value || settings.voiceURI;
+
+    store.set("words", JSON.stringify(settings.words));
+    store.set("setSize", settings.setSize);
+    store.set("shuffle", settings.shuffle ? "1":"0");
+    store.set("case", settings["case"]);
+    store.set("rate", String(settings.rate));
+    store.set("voiceURI", settings.voiceURI);
+
+    closePanel();
+    buildOrder(); rebuildWordEl(); render(true);
+  });
+
+  $("reset").addEventListener("click", function(){
+    if (confirm("Replace your list with the full UFLI heart words?")){
+      settings.words = STARTER.slice();
+      $("wordsInput").value = settings.words.join("\n");
+    }
+  });
+
+  window.addEventListener("resize", function(){ if (!done) fitWord(); });
+
+  // ---- start ----
+  buildOrder();
+  render(false);
+})();
+</script>
+</body>
+</html>
