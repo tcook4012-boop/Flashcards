@@ -338,7 +338,7 @@
   };
 
   // ---- UFLI Foundations irregular "heart" words, in teaching order ----
-  var STARTER = ["the","said","to","do","of","from","are","was","what","your",
+  var STARTER = ["said","to","do","of","from","are","was","what","your",
     "goes","says","their","were","talk","walk","could","would","should","there",
     "where","who","one","once","two","does","many","any","been","into",
     "friend","because","woman","women","move","both","four","fourth","people","pretty",
@@ -492,24 +492,46 @@
 
   // ---- speech ----
   var voices = [];
+  function voiceScore(v){
+    var l = (v.lang||"").toLowerCase().replace(/_/g,"-");
+    var n = (v.name||"").toLowerCase();
+    var s = 0;
+    if (l.indexOf("en-us")===0) s += 100;            // US English wins
+    else if (l.indexOf("en")===0 && l.indexOf("en-gb")!==0) s += 30; // other English, not British
+    else if (l.indexOf("en")===0) s += 5;            // British English only as last English resort
+    if (/united states|us english|english \(united states\)/.test(n)) s += 20;
+    if (/google/.test(n)) s += 8;                    // Google US English sounds natural
+    if (/samantha|alex|aria|jenny|ava|nova|allison|susan|zira/.test(n)) s += 6; // common US voices
+    if (/enhanced|premium|natural|neural/.test(n)) s += 4;
+    if (/uk|british|england|\(gb\)|en-gb/.test(n)) s -= 40; // actively avoid British
+    return s;
+  }
+  function bestVoice(){
+    var best=null, bs=-1;
+    for (var i=0;i<voices.length;i++){ var sc=voiceScore(voices[i]); if (sc>bs){ bs=sc; best=voices[i]; } }
+    return best;
+  }
   function loadVoices(){
     if (!("speechSynthesis" in window)) return;
     voices = window.speechSynthesis.getVoices() || [];
     var sel = $("voiceSel"); if (!sel) return;
     sel.innerHTML = "";
     var eng = voices.filter(function(v){ return /^en/i.test(v.lang); });
-    var list = eng.length ? eng : voices;
+    var list = (eng.length ? eng : voices).slice().sort(function(a,b){ return voiceScore(b)-voiceScore(a); });
     list.forEach(function(v){
       var o = document.createElement("option");
       o.value = v.voiceURI; o.textContent = v.name + " (" + v.lang + ")";
       if (v.voiceURI === settings.voiceURI) o.selected = true;
       sel.appendChild(o);
     });
-    if (!settings.voiceURI && list[0]){ settings.voiceURI = list[0].voiceURI; }
+    if (!settings.voiceURI){ var bv = bestVoice(); if (bv) settings.voiceURI = bv.voiceURI; }
   }
   function pickVoice(){
-    return voices.filter(function(v){ return v.voiceURI === settings.voiceURI; })[0] ||
-           voices.filter(function(v){ return /^en/i.test(v.lang); })[0] || voices[0];
+    if (settings.voiceURI){
+      var chosen = voices.filter(function(v){ return v.voiceURI === settings.voiceURI; })[0];
+      if (chosen) return chosen;
+    }
+    return bestVoice() || voices[0];
   }
   function speak(){
     if (done) return;
