@@ -82,29 +82,50 @@
   /* ---- Bottom controls ---- */
   .controls{
     position:fixed; left:0; right:0; z-index:5;
-    bottom: max(20px, env(safe-area-inset-bottom));
-    display:flex; align-items:center; justify-content:center; gap:26px;
-    padding:0 16px;
+    bottom: max(18px, env(safe-area-inset-bottom));
+    display:flex; align-items:center; justify-content:center; gap:14px;
+    padding:0 12px;
   }
   .nav{
-    width:60px; height:60px; border:none; border-radius:50%;
+    width:54px; height:54px; border:none; border-radius:50%;
     background:var(--ui-bg); color:var(--ui); display:grid; place-items:center;
-    backdrop-filter: blur(6px); cursor:pointer; transition: transform .12s ease;
+    backdrop-filter: blur(6px); cursor:pointer; transition: transform .12s ease; flex:none;
   }
   .nav:active{ transform: scale(.9); }
-  .nav svg{ width:30px; height:30px; }
+  .nav svg{ width:28px; height:28px; }
   .nav[disabled]{ opacity:.3; }
+  .bigwrap{ display:flex; flex-direction:column; align-items:center; gap:5px; flex:none; }
+  .blabel{ font-size:12px; font-weight:700; color:var(--ui); letter-spacing:.3px; }
   .speak{
-    width:104px; height:104px; border:none; border-radius:50%;
+    width:84px; height:84px; border:none; border-radius:50%;
     background:#fff; color:var(--ink);
     display:grid; place-items:center; cursor:pointer;
-    box-shadow: 0 10px 26px rgba(0,0,0,.18);
+    box-shadow: 0 8px 22px rgba(0,0,0,.18);
     transition: transform .12s ease;
   }
   .speak:active{ transform: scale(.92); }
   .speak.talking{ animation: pulse 1s ease-in-out infinite; }
   @keyframes pulse{ 0%,100%{ transform:scale(1);} 50%{ transform:scale(1.07);} }
-  .speak svg{ width:50px; height:50px; }
+  .speak svg{ width:40px; height:40px; }
+  .mic{ background:var(--ink); color:#fff; }
+  .mic.listening{ background:#e23b3b; color:#fff; animation: pulse .9s ease-in-out infinite; }
+  .mic[disabled]{ opacity:.4; }
+
+  /* ---- Result badge ---- */
+  .result{
+    position:fixed; left:50%; bottom:138px; z-index:6; pointer-events:none;
+    transform: translateX(-50%) translateY(10px); opacity:0;
+    transition: opacity .2s ease, transform .2s ease;
+    background:#fff; border-radius:18px; padding:13px 20px; text-align:center;
+    box-shadow:0 12px 34px rgba(0,0,0,.22); max-width:88vw;
+  }
+  .result.show{ opacity:1; transform: translateX(-50%) translateY(0); }
+  .result .ricon{ font-size:30px; line-height:1; }
+  .result .rmsg{ font-size:17px; font-weight:800; margin-top:2px; color:#444; }
+  .result .rheard{ font-size:13px; color:#999; margin-top:3px; font-weight:600; }
+  .result.pass{ box-shadow:0 12px 34px rgba(46,160,86,.35); }
+  .result.pass .rmsg{ color:#1f9d4d; }
+  .result.fail .rmsg{ color:#d1542f; }
 
   /* ---- Done screen ---- */
   .done{ text-align:center; color:var(--ink); padding:0 16px; }
@@ -203,15 +224,25 @@
   <div class="stage" id="stage">
     <div class="word" id="word">word</div>
   </div>
-  <div class="hint" id="hint">press the speaker to hear the word</div>
+  <div class="hint" id="hint">press hear to listen &middot; say it to read it yourself</div>
+  <div class="result" id="result" aria-live="polite"></div>
 
   <div class="controls">
     <button class="nav" id="prev" aria-label="Previous word">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
     </button>
-    <button class="speak" id="speak" aria-label="Read word aloud">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11 5 6 9H3a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h3l5 4a1 1 0 0 0 1.6-.8V5.8A1 1 0 0 0 11 5z"/><path d="M16.5 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M19 6a8 8 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-    </button>
+    <div class="bigwrap">
+      <button class="speak" id="speak" aria-label="Hear the word">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11 5 6 9H3a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h3l5 4a1 1 0 0 0 1.6-.8V5.8A1 1 0 0 0 11 5z"/><path d="M16.5 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M19 6a8 8 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <span class="blabel">hear</span>
+    </div>
+    <div class="bigwrap">
+      <button class="speak mic" id="mic" aria-label="Say the word to check it">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3z"/><path d="M19 11a1 1 0 1 0-2 0 5 5 0 0 1-10 0 1 1 0 1 0-2 0 7 7 0 0 0 6 6.92V21a1 1 0 1 0 2 0v-3.08A7 7 0 0 0 19 11z"/></svg>
+      </button>
+      <span class="blabel" id="micLabel">say it</span>
+    </div>
     <button class="nav" id="next" aria-label="Next word">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
     </button>
@@ -424,6 +455,7 @@
 
   function go(dir){
     rebuildWordEl();
+    if (resultEl) resultEl.classList.remove("show");
     if (done){
       if (dir<0){ done=false; render(true); }
       return;
@@ -477,6 +509,94 @@
   if ("speechSynthesis" in window){
     loadVoices();
     window.speechSynthesis.onvoiceschanged = loadVoices;
+  }
+
+  // ---- speech recognition (say-the-word check) ----
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var micBtn = $("mic"), micLabel = $("micLabel"), resultEl = $("result");
+  var listening = false, resultTimer = null;
+
+  // real-word homophones + digit forms the recognizer is likely to return
+  var HOMO = {
+    to:["two","too","2"], two:["to","too","2"], too:["to","two"], do:["due","dew","doo"],
+    one:["won","1"], won:["one","1"], four:["for","fore","4"], fourth:["forth"],
+    buy:["by","bye"], son:["sun"], hour:["our"], eye:["i","aye"],
+    their:["there","theyre"], there:["their","theyre"], your:["youre","yore"],
+    were:["where"], where:["wear","ware","were"], whose:["whos"],
+    through:["threw","thru"], guest:["guessed"], poor:["pour","pore"],
+    sure:["shore"], been:["bin"], would:["wood"], heart:["hart"]
+  };
+
+  function norm(s){ return (s||"").toLowerCase().replace(/[^a-z0-9]/g,""); }
+
+  function acceptable(target){
+    var set = {}; var t = norm(target); set[t] = 1;
+    var extra = HOMO[t];
+    if (extra){ for (var i=0;i<extra.length;i++) set[norm(extra[i])] = 1; }
+    return set;
+  }
+
+  function isMatch(target, alts){
+    var ok = acceptable(target);
+    for (var i=0;i<alts.length;i++){
+      var a = (alts[i]||"").toLowerCase();
+      if (ok[norm(a)]) return true;
+      var toks = a.split(/\s+/);
+      for (var j=0;j<toks.length;j++){ if (ok[norm(toks[j])]) return true; }
+    }
+    return false;
+  }
+
+  function escapeHtml(s){ return (s||"").replace(/[<>&]/g, function(c){ return c==="<"?"&lt;":c===">"?"&gt;":"&amp;"; }); }
+
+  function showResult(kind, icon, msg, heard){
+    resultEl.className = "result show " + kind;
+    resultEl.innerHTML = '<div class="ricon">'+icon+'</div><div class="rmsg">'+msg+'</div>' +
+      (heard ? '<div class="rheard">you said: '+escapeHtml(heard)+'</div>' : '');
+    clearTimeout(resultTimer);
+    resultTimer = setTimeout(function(){ resultEl.classList.remove("show"); }, kind==="pass" ? 2600 : 3000);
+  }
+
+  function setListening(on){
+    listening = on;
+    if (on){ micBtn.classList.add("listening"); if (micLabel) micLabel.textContent = "listening\u2026"; }
+    else { micBtn.classList.remove("listening"); if (micLabel) micLabel.textContent = "say it"; }
+  }
+
+  function startListen(){
+    if (done) return;
+    if (!SR){ showResult("info","\uD83C\uDFA4","This browser can't listen","try Chrome on Android"); return; }
+    if (listening) return;
+    try { if ("speechSynthesis" in window) window.speechSynthesis.cancel(); } catch(e){}
+    var set = currentSet();
+    var target = settings.words[set[pos]];
+    var r;
+    try { r = new SR(); } catch(e){ showResult("info","\uD83C\uDFA4","Couldn't start the mic"); return; }
+    r.lang = "en-US"; r.interimResults = false; r.maxAlternatives = 6; r.continuous = false;
+    r.onstart = function(){ setListening(true); };
+    r.onend = function(){ setListening(false); };
+    r.onerror = function(ev){
+      setListening(false);
+      var code = ev && ev.error;
+      if (code==="not-allowed" || code==="service-not-allowed") showResult("info","\uD83D\uDD12","Allow microphone access","then tap the mic again");
+      else if (code==="no-speech") showResult("info","\uD83D\uDC42","I didn't hear anything","tap the mic and try again");
+      else if (code==="audio-capture") showResult("info","\uD83C\uDFA4","No microphone found");
+      else if (code==="network") showResult("info","\uD83D\uDCF6","Need internet to listen");
+      else showResult("info","\uD83C\uDFA4","Didn't catch that","try again");
+    };
+    r.onresult = function(ev){
+      var alts = [];
+      try { var res = ev.results[0]; for (var i=0;i<res.length;i++) alts.push(res[i].transcript); } catch(e){}
+      var heard = alts[0] || "";
+      if (isMatch(target, alts)) showResult("pass","\u2705","You got it!", heard);
+      else showResult("fail","\uD83D\uDD04","Try again", heard);
+    };
+    try { r.start(); } catch(e){ setListening(false); }
+  }
+
+  if (micBtn){
+    if (!SR){ micBtn.disabled = true; if (micLabel) micLabel.textContent = "n/a"; }
+    micBtn.addEventListener("click", startListen);
   }
 
   // ---- swipe ----
