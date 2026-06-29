@@ -222,12 +222,50 @@
   }
   .balloon .string{ position:absolute; left:50%; top:68px; width:1px; height:62px; background:rgba(0,0,0,.16); }
 
+  /* ---- Home / profile picker ---- */
+  #home{
+    position:fixed; inset:0; z-index:20;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:18px; padding:24px; background:linear-gradient(160deg,#fdf2f8,#eef2ff);
+  }
+  #home h1{ margin:0; font-size:28px; font-weight:800; color:#2b2b2b; }
+  #home .who{ font-size:15px; color:#8a8a8a; font-weight:600; margin-bottom:8px; }
+  .choice{
+    width:min(420px,86vw); border:none; border-radius:24px; padding:24px 26px;
+    color:#fff; cursor:pointer; text-align:left;
+    display:flex; flex-direction:column; gap:3px;
+    box-shadow:0 12px 30px rgba(0,0,0,.16); transition: transform .12s ease;
+  }
+  .choice:active{ transform: scale(.98); }
+  .choice .big{ font-size:32px; font-weight:800; }
+  .choice .small{ font-size:15px; font-weight:600; opacity:.95; }
+  body.playing #home{ display:none; }
+  body:not(.playing) .topbar,
+  body:not(.playing) .stage,
+  body:not(.playing) .hint,
+  body:not(.playing) .result,
+  body:not(.playing) .controls{ display:none !important; }
+
   @media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important; } }
 </style>
 </head>
 <body>
 
+  <div id="home">
+    <h1>Flashcards</h1>
+    <div class="who">Who's playing?</div>
+    <button class="choice" id="btnLondon" style="background:linear-gradient(160deg,#ff9a6b,#ff7a59)">
+      <span class="big">London</span><span class="small">Reading words</span>
+    </button>
+    <button class="choice" id="btnNolan" style="background:linear-gradient(160deg,#5aa0ff,#3b82f6)">
+      <span class="big">Nolan</span><span class="small">Letters &amp; numbers 1&ndash;100</span>
+    </button>
+  </div>
+
   <div class="topbar">
+    <button class="gear" id="homeBtn" aria-label="Home">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/></svg>
+    </button>
     <div class="progress-wrap">
       <div class="pill setpill" id="setpill">Set 1/1</div>
       <div class="pill count" id="count">1 / 1</div>
@@ -254,7 +292,7 @@
       </button>
       <span class="blabel">hear</span>
     </div>
-    <div class="bigwrap">
+    <div class="bigwrap" id="micWrap">
       <button class="speak mic" id="mic" aria-label="Say the word to check it">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3z"/><path d="M19 11a1 1 0 1 0-2 0 5 5 0 0 1-10 0 1 1 0 1 0-2 0 7 7 0 0 0 6 6.92V21a1 1 0 1 0 2 0v-3.08A7 7 0 0 0 19 11z"/></svg>
       </button>
@@ -285,7 +323,7 @@
     </header>
     <div class="body">
       <div class="field">
-        <label>Word list <span class="sub">&mdash; one word per line</span></label>
+        <label>List <span class="sub">&mdash; one per line</span></label>
         <textarea id="wordsInput" spellcheck="false"></textarea>
       </div>
 
@@ -358,16 +396,43 @@
     { bg:"linear-gradient(160deg,#FFE2EC,#FFC9DB)", ink:"#5C2438", ui:"#7d3450", theme:"#FFC9DB" }
   ];
 
-  var settings = {
-    words: STARTER.slice(),
-    setSize: store.get("setSize") || "8",
-    shuffle: store.get("shuffle") === "1",
-    "case": store.get("case") || "as",
-    rate: parseFloat(store.get("rate")) || 0.85,
-    voiceURI: store.get("voiceURI") || ""
+  // ---- letters & numbers for Nolan ----
+  var LETTERS = []; for (var _c=65;_c<=90;_c++) LETTERS.push(String.fromCharCode(_c));
+  var NUMBERS = []; for (var _n=1;_n<=100;_n++) NUMBERS.push(String(_n));
+  var LETTER_SAY = {A:"ay",B:"bee",C:"see",D:"dee",E:"ee",F:"eff",G:"gee",H:"aitch",I:"eye",J:"jay",K:"kay",L:"ell",M:"em",N:"en",O:"oh",P:"pee",Q:"cue",R:"are",S:"ess",T:"tee",U:"you",V:"vee",W:"double you",X:"ex",Y:"why",Z:"zee"};
+
+  var PROFILES = {
+    london: {
+      name:"London", items: STARTER, showMic:true, tapCard:false,
+      caseDefault:"as", setSizeDefault:"8", speakMap:null,
+      hint:"press hear to listen \u00b7 say it to read it yourself",
+      resetLabel:"Reset to UFLI heart words",
+      resetConfirm:"Replace your list with the full UFLI heart words?"
+    },
+    nolan: {
+      name:"Nolan", items: LETTERS.concat(NUMBERS), showMic:false, tapCard:true,
+      caseDefault:"as", setSizeDefault:"10", speakMap: LETTER_SAY,
+      hint:"tap the big letter or number to hear it \uD83C\uDF89",
+      resetLabel:"Reset to letters & numbers",
+      resetConfirm:"Replace the list with A\u2013Z and 1\u2013100?"
+    }
   };
-  var savedWords = store.get("words");
-  if (savedWords){ try { var p = JSON.parse(savedWords); if (Array.isArray(p) && p.length) settings.words = p; } catch(e){} }
+
+  var pid = null, profile = null, settings = null;
+  function k(name){ return pid + ":" + name; }
+  function loadSettings(){
+    var d = profile;
+    settings = {
+      words: d.items.slice(),
+      setSize: store.get(k("setSize")) || d.setSizeDefault,
+      shuffle: store.get(k("shuffle")) === "1",
+      "case": store.get(k("case")) || d.caseDefault,
+      rate: parseFloat(store.get(k("rate"))) || 0.85,
+      voiceURI: store.get(k("voiceURI")) || ""
+    };
+    var sw = store.get(k("words"));
+    if (sw){ try { var p = JSON.parse(sw); if (Array.isArray(p) && p.length) settings.words = p; } catch(e){} }
+  }
 
   var fullOrder = [];   // indices into settings.words
   var setSize = 8;      // resolved numeric set size
@@ -430,6 +495,14 @@
       stage.innerHTML = '<div class="word" id="word">word</div>';
       wordEl = document.getElementById("word");
     }
+    if (wordEl) wordEl.onclick = wordTapped;
+  }
+  var lastCele = 0;
+  function wordTapped(){
+    if (done || !profile || !profile.tapCard) return;
+    speak();
+    var now = Date.now();
+    if (now - lastCele > 500){ lastCele = now; celebrate(); }
   }
 
   function showSetPill(){
@@ -452,7 +525,7 @@
       prevBtn.disabled = false;
       var emoji = last ? "\uD83C\uDF89" : "\uD83C\uDF1F";
       var msg = last ? "All done!" : "Set " + (setIndex+1) + " done!";
-      var sub = last ? "Great reading today" : "Ready for the next set?";
+      var sub = last ? "Great job today!" : "Ready for the next set?";
       var html = '<div class="done"><div class="emoji">'+emoji+'</div><div class="msg">'+msg+'</div><div class="sub">'+sub+'</div><div class="donebtns">';
       if (!last) html += '<button class="bigbtn" id="nextSet">Next set &#9654;</button>';
       html += '<button class="bigbtn'+(last?'':' ghost')+'" id="startOver">Start over</button></div></div>';
@@ -476,6 +549,7 @@
   }
 
   function go(dir){
+    if (!document.body.classList.contains("playing")) return;
     rebuildWordEl();
     if (resultEl) resultEl.classList.remove("show");
     if (done){
@@ -521,10 +595,10 @@
     list.forEach(function(v){
       var o = document.createElement("option");
       o.value = v.voiceURI; o.textContent = v.name + " (" + v.lang + ")";
-      if (v.voiceURI === settings.voiceURI) o.selected = true;
+      if (settings && v.voiceURI === settings.voiceURI) o.selected = true;
       sel.appendChild(o);
     });
-    if (!settings.voiceURI){ var bv = bestVoice(); if (bv) settings.voiceURI = bv.voiceURI; }
+    if (settings && !settings.voiceURI){ var bv = bestVoice(); if (bv) settings.voiceURI = bv.voiceURI; }
   }
   function pickVoice(){
     if (settings.voiceURI){
@@ -534,14 +608,16 @@
     return bestVoice() || voices[0];
   }
   function speak(){
+    if (!document.body.classList.contains("playing")) return;
     if (done) return;
     if (!("speechSynthesis" in window)) return;
     var set = currentSet();
     var raw = settings.words[set[pos]];
-    if (!raw) return;
+    if (!raw && raw !== 0) return;
+    var spoken = (profile && profile.speakMap && profile.speakMap[raw]) ? profile.speakMap[raw] : raw;
     try{
       window.speechSynthesis.cancel();
-      var u = new SpeechSynthesisUtterance(raw);
+      var u = new SpeechSynthesisUtterance(String(spoken));
       var v = pickVoice(); if (v) u.voice = v;
       u.lang = (v && v.lang) || "en-US";
       u.rate = settings.rate; u.pitch = 1.05;
@@ -794,7 +870,7 @@
 
   $("save").addEventListener("click", function(){
     var raw = $("wordsInput").value.split("\n").map(function(s){ return s.trim(); }).filter(Boolean);
-    if (!raw.length) raw = STARTER.slice();
+    if (!raw.length) raw = profile.items.slice();
     settings.words = raw;
     settings.setSize = $("setSizeSel").value;
     settings.shuffle = $("shuffle").checked;
@@ -803,29 +879,48 @@
     settings["case"] = onCase ? onCase.getAttribute("data-case") : "as";
     settings.voiceURI = $("voiceSel").value || settings.voiceURI;
 
-    store.set("words", JSON.stringify(settings.words));
-    store.set("setSize", settings.setSize);
-    store.set("shuffle", settings.shuffle ? "1":"0");
-    store.set("case", settings["case"]);
-    store.set("rate", String(settings.rate));
-    store.set("voiceURI", settings.voiceURI);
+    store.set(k("words"), JSON.stringify(settings.words));
+    store.set(k("setSize"), settings.setSize);
+    store.set(k("shuffle"), settings.shuffle ? "1":"0");
+    store.set(k("case"), settings["case"]);
+    store.set(k("rate"), String(settings.rate));
+    store.set(k("voiceURI"), settings.voiceURI);
 
     closePanel();
     buildOrder(); rebuildWordEl(); render(true);
   });
 
   $("reset").addEventListener("click", function(){
-    if (confirm("Replace your list with the full UFLI heart words?")){
-      settings.words = STARTER.slice();
+    if (confirm(profile.resetConfirm)){
+      settings.words = profile.items.slice();
       $("wordsInput").value = settings.words.join("\n");
     }
   });
 
-  window.addEventListener("resize", function(){ if (!done) fitWord(); });
+  window.addEventListener("resize", function(){ if (!done && settings) fitWord(); });
 
-  // ---- start ----
-  buildOrder();
-  render(false);
+  // ---- profiles: home screen + activation ----
+  var micWrap = $("micWrap");
+  function activate(id){
+    pid = id; profile = PROFILES[id];
+    loadSettings();
+    if (micWrap) micWrap.style.display = profile.showMic ? "" : "none";
+    if (hint) hint.textContent = profile.hint;
+    var rb = $("reset"); if (rb) rb.textContent = profile.resetLabel;
+    document.body.classList.add("playing");
+    buildOrder(); rebuildWordEl(); if (wordEl) wordEl.onclick = wordTapped; render(false);
+  }
+  function goHome(){
+    try { if ("speechSynthesis" in window) window.speechSynthesis.cancel(); } catch(e){}
+    setListening(false);
+    if (resultEl) resultEl.classList.remove("show");
+    closePanel(); closeSetPicker();
+    document.body.classList.remove("playing");
+  }
+  var bl=$("btnLondon"), bn=$("btnNolan"), hb=$("homeBtn");
+  if (bl) bl.addEventListener("click", function(){ activate("london"); });
+  if (bn) bn.addEventListener("click", function(){ activate("nolan"); });
+  if (hb) hb.addEventListener("click", goHome);
 })();
 </script>
 </body>
