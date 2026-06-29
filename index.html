@@ -592,13 +592,24 @@
     sel.innerHTML = "";
     var eng = voices.filter(function(v){ return /^en/i.test(v.lang); });
     var list = (eng.length ? eng : voices).slice().sort(function(a,b){ return voiceScore(b)-voiceScore(a); });
+    // default the dropdown to the best (US-first) voice, but don't lock it in unless saved
+    var selectURI = (settings && settings.voiceURI) ? settings.voiceURI : (list[0] ? list[0].voiceURI : "");
     list.forEach(function(v){
       var o = document.createElement("option");
       o.value = v.voiceURI; o.textContent = v.name + " (" + v.lang + ")";
-      if (settings && v.voiceURI === settings.voiceURI) o.selected = true;
+      if (v.voiceURI === selectURI) o.selected = true;
       sel.appendChild(o);
     });
-    if (settings && !settings.voiceURI){ var bv = bestVoice(); if (bv) settings.voiceURI = bv.voiceURI; }
+  }
+  function bestUSVoice(){
+    var best=null, bs=-1;
+    for (var i=0;i<voices.length;i++){
+      var v=voices[i], l=(v.lang||"").toLowerCase().replace(/_/g,"-");
+      if (l.indexOf("en-us")!==0) continue;
+      var sc=voiceScore(v);
+      if (sc>bs){ bs=sc; best=v; }
+    }
+    return best;
   }
   function pickVoice(){
     if (settings.voiceURI){
@@ -618,8 +629,15 @@
     try{
       window.speechSynthesis.cancel();
       var u = new SpeechSynthesisUtterance(String(spoken));
-      var v = pickVoice(); if (v) u.voice = v;
-      u.lang = (v && v.lang) || "en-US";
+      var chosen = null;
+      if (settings.voiceURI){ chosen = voices.filter(function(v){ return v.voiceURI === settings.voiceURI; })[0] || null; }
+      if (chosen){
+        u.voice = chosen; u.lang = chosen.lang || "en-US";
+      } else {
+        var us = bestUSVoice();
+        if (us) u.voice = us;   // pin a voice only if it's genuinely US
+        u.lang = "en-US";       // otherwise still ask the phone for American
+      }
       u.rate = settings.rate; u.pitch = 1.05;
       u.onstart = function(){ speakBtn.classList.add("talking"); };
       u.onend = u.onerror = function(){ speakBtn.classList.remove("talking"); };
