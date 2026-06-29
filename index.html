@@ -410,9 +410,9 @@
       resetConfirm:"Replace your list with the full UFLI heart words?"
     },
     nolan: {
-      name:"Nolan", items: LETTERS.concat(NUMBERS), showMic:false, tapCard:true,
+      name:"Nolan", items: LETTERS.concat(NUMBERS), showMic:true, tapCard:true, kind:"letters",
       caseDefault:"as", setSizeDefault:"10", speakMap: LETTER_SAY,
-      hint:"tap the big letter or number to hear it \uD83C\uDF89",
+      hint:"tap to hear it \u00b7 say it to guess \uD83C\uDF89",
       resetLabel:"Reset to letters & numbers",
       resetConfirm:"Replace the list with A\u2013Z and 1\u2013100?"
     }
@@ -650,8 +650,35 @@
 
   function norm(s){ return (s||"").toLowerCase().replace(/[^a-z0-9]/g,""); }
 
+  // how the recognizer is likely to hear each spoken letter name
+  var LETTER_HEAR = {
+    A:["a","ay","eh"], B:["b","be","bee"], C:["c","see","sea"], D:["d","dee"],
+    E:["e","ee"], F:["f","eff","ef"], G:["g","gee","jee"], H:["h","aitch","aych","haitch"],
+    I:["i","eye","aye"], J:["j","jay"], K:["k","kay"], L:["l","el","ell"],
+    M:["m","em"], N:["n","en"], O:["o","oh","owe"], P:["p","pee","pea"],
+    Q:["q","cue","queue","kew"], R:["r","are","ar"], S:["s","ess","es"], T:["t","tee","tea"],
+    U:["u","you","ewe"], V:["v","vee"], W:["w","double u","double you","dub","dubya"],
+    X:["x","ex","eks"], Y:["y","why","wye"], Z:["z","zee","zed"]
+  };
+  var ONES=["zero","one","two","three","four","five","six","seven","eight","nine","ten","eleven","twelve","thirteen","fourteen","fifteen","sixteen","seventeen","eighteen","nineteen"];
+  var TENS=["","","twenty","thirty","forty","fifty","sixty","seventy","eighty","ninety"];
+  function numWord(n){
+    n = parseInt(n,10); if (isNaN(n)) return "";
+    if (n < 20) return ONES[n];
+    if (n === 100) return "one hundred";
+    var t = Math.floor(n/10), o = n%10;
+    return o ? TENS[t]+" "+ONES[o] : TENS[t];
+  }
+
   function acceptable(target){
-    var set = {}; var t = norm(target); set[t] = 1;
+    var set = {}, raw = String(target), t = norm(raw);
+    set[t] = 1;
+    if (profile && profile.kind === "letters") {
+      var letter = raw.toUpperCase();
+      if (LETTER_HEAR[letter]){ var L=LETTER_HEAR[letter]; for (var a=0;a<L.length;a++) set[norm(L[a])] = 1; }
+      if (/^\d+$/.test(raw)){ set[norm(numWord(raw))] = 1; if (raw==="100"){ set["hundred"]=1; set["ahundred"]=1; } }
+      return set;
+    }
     var extra = HOMO[t];
     if (extra){ for (var i=0;i<extra.length;i++) set[norm(extra[i])] = 1; }
     return set;
